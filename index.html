@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battle Snake - Viboritas que se Comen</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            font-size: 2.5em;
+        }
+
+        .game-container {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        #gameCanvas {
+            border: 3px solid #fff;
+            border-radius: 10px;
+            background: #1a1a2e;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .score-board {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .player-score {
+            padding: 10px 20px;
+            border-radius: 25px;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(5px);
+        }
+
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            display: none;
+        }
+
+        button {
+            background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+
+        .instructions {
+            margin-top: 15px;
+            text-align: center;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <h1>🐍 Battle Snake 🐍</h1>
+    
+    <div class="game-container">
+        <div class="score-board">
+            <div class="player-score" style="color: #4ecdc4;">
+                🐍 Jugador: <span id="playerScore">3</span>
+            </div>
+            <div class="player-score" style="color: #ff6b6b;">
+                🤖 IA: <span id="aiScore">3</span>
+            </div>
+        </div>
+        
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
+        
+        <div class="controls">
+            <button onclick="startGame()">Nuevo Juego</button>
+            <button onclick="togglePause()">Pausar/Reanudar</button>
+        </div>
+        
+        <div class="instructions">
+            <p><strong>Controles:</strong> Usa las flechas del teclado para mover tu serpiente</p>
+            <p><strong>Objetivo:</strong> Come a la serpiente enemiga para crecer y ganar</p>
+            <p>¡Evita chocar con las paredes y con tu propia cola!</p>
+        </div>
+    </div>
+
+    <div class="game-over" id="gameOver">
+        <h2 id="gameOverText">¡Juego Terminado!</h2>
+        <p id="winner"></p>
+        <button onclick="startGame()">Jugar de Nuevo</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameOverDiv = document.getElementById('gameOver');
+
+        const gridSize = 20;
+        const gridWidth = canvas.width / gridSize;
+        const gridHeight = canvas.height / gridSize;
+
+        let gameRunning = false;
+        let gamePaused = false;
+        let gameLoop;
+
+        // Serpiente del jugador
+        let playerSnake = {
+            body: [{x: 5, y: 5}, {x: 4, y: 5}, {x: 3, y: 5}],
+            direction: {x: 1, y: 0},
+            color: '#4ecdc4'
+        };
+
+        // Serpiente IA
+        let aiSnake = {
+            body: [{x: 25, y: 15}, {x: 24, y: 15}, {x: 23, y: 15}],
+            direction: {x: -1, y: 0},
+            color: '#ff6b6b'
+        };
+
+        // Comida
+        let food = generateFood();
+
+        function generateFood() {
+            let foodPosition;
+            do {
+                foodPosition = {
+                    x: Math.floor(Math.random() * gridWidth),
+                    y: Math.floor(Math.random() * gridHeight)
+                };
+            } while (isPositionOccupied(foodPosition));
+            return foodPosition;
+        }
+
+        function isPositionOccupied(pos) {
+            return playerSnake.body.some(segment => segment.x === pos.x && segment.y === pos.y) ||
+                   aiSnake.body.some(segment => segment.x === pos.x && segment.y === pos.y);
+        }
+
+        function drawGame() {
+            // Limpiar canvas
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Dibujar serpiente del jugador
+            drawSnake(playerSnake);
+
+            // Dibujar serpiente IA
+            drawSnake(aiSnake);
+
+            // Dibujar comida
+            ctx.fillStyle = '#ffd93d';
+            ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize, gridSize);
+            
+            // Agregar brillo a la comida
+            ctx.shadowColor = '#ffd93d';
+            ctx.shadowBlur = 10;
+            ctx.fillRect(food.x * gridSize + 2, food.y * gridSize + 2, gridSize - 4, gridSize - 4);
+            ctx.shadowBlur = 0;
+        }
+
+        function drawSnake(snake) {
+            snake.body.forEach((segment, index) => {
+                ctx.fillStyle = snake.color;
+                if (index === 0) {
+                    // Cabeza más brillante
+                    ctx.shadowColor = snake.color;
+                    ctx.shadowBlur = 15;
+                }
+                ctx.fillRect(segment.x * gridSize + 1, segment.y * gridSize + 1, gridSize - 2, gridSize - 2);
+                ctx.shadowBlur = 0;
+            });
+        }
+
+        function moveSnake(snake) {
+            const head = {...snake.body[0]};
+            head.x += snake.direction.x;
+            head.y += snake.direction.y;
+
+            snake.body.unshift(head);
+
+            // Verificar si comió algo
+            let ate = false;
+            if (head.x === food.x && head.y === food.y) {
+                food = generateFood();
+                ate = true;
+            }
+
+            // Verificar si comió a la otra serpiente
+            const otherSnake = snake === playerSnake ? aiSnake : playerSnake;
+            if (checkSnakeCollision(head, otherSnake.body)) {
+                // Come un segmento de la otra serpiente
+                otherSnake.body.pop();
+                ate = true;
+                
+                // Si la otra serpiente se queda sin cuerpo, game over
+                if (otherSnake.body.length === 0) {
+                    endGame(snake === playerSnake ? 'player' : 'ai');
+                    return;
+                }
+            }
+
+            if (!ate) {
+                snake.body.pop();
+            }
+        }
+
+        function checkSnakeCollision(head, snakeBody) {
+            return snakeBody.some(segment => segment.x === head.x && segment.y === head.y);
+        }
+
+        function checkWallCollision(head) {
+            return head.x < 0 || head.x >= gridWidth || head.y < 0 || head.y >= gridHeight;
+        }
+
+        function checkSelfCollision(snake) {
+            const head = snake.body[0];
+            return snake.body.slice(1).some(segment => segment.x === head.x && segment.y === head.y);
+        }
+
+        function aiMove() {
+            const head = aiSnake.body[0];
+            const playerHead = playerSnake.body[0];
+            
+            // Estrategia simple: perseguir al jugador o ir por comida
+            let targetX, targetY;
+            
+            // Si el jugador está cerca, perseguirlo
+            const distanceToPlayer = Math.abs(head.x - playerHead.x) + Math.abs(head.y - playerHead.y);
+            const distanceToFood = Math.abs(head.x - food.x) + Math.abs(head.y - food.y);
+            
+            if (distanceToPlayer < 8 && aiSnake.body.length >= playerSnake.body.length) {
+                targetX = playerHead.x;
+                targetY = playerHead.y;
+            } else {
+                targetX = food.x;
+                targetY = food.y;
+            }
+
+            // Calcular mejor dirección
+            const possibleDirections = [
+                {x: 1, y: 0},   // derecha
+                {x: -1, y: 0},  // izquierda
+                {x: 0, y: 1},   // abajo
+                {x: 0, y: -1}   // arriba
+            ];
+
+            let bestDirection = aiSnake.direction;
+            let bestDistance = Infinity;
+
+            possibleDirections.forEach(dir => {
+                const newHead = {
+                    x: head.x + dir.x,
+                    y: head.y + dir.y
+                };
+
+                // Evitar paredes, su propia cola y (a veces) el jugador
+                if (!checkWallCollision(newHead) && 
+                    !checkSnakeCollision(newHead, aiSnake.body.slice(1)) &&
+                    !checkSnakeCollision(newHead, playerSnake.body.slice(0, -2))) {
+                    
+                    const distance = Math.abs(newHead.x - targetX) + Math.abs(newHead.y - targetY);
+                    if (distance < bestDistance) {
+                        bestDistance = distance;
+                        bestDirection = dir;
+                    }
+                }
+            });
+
+            aiSnake.direction = bestDirection;
+        }
+
+        function gameStep() {
+            if (!gameRunning || gamePaused) return;
+
+            // Mover serpientes
+            moveSnake(playerSnake);
+            aiMove();
+            moveSnake(aiSnake);
+
+            // Verificar colisiones
+            const playerHead = playerSnake.body[0];
+            const aiHead = aiSnake.body[0];
+
+            // Colisión con paredes
+            if (checkWallCollision(playerHead)) {
+                endGame('ai');
+                return;
+            }
+            if (checkWallCollision(aiHead)) {
+                endGame('player');
+                return;
+            }
+
+            // Colisión consigo mismo
+            if (checkSelfCollision(playerSnake)) {
+                endGame('ai');
+                return;
+            }
+            if (checkSelfCollision(aiSnake)) {
+                endGame('player');
+                return;
+            }
+
+            // Actualizar puntajes
+            updateScores();
+
+            // Dibujar juego
+            drawGame();
+        }
+
+        function updateScores() {
+            document.getElementById('playerScore').textContent = playerSnake.body.length;
+            document.getElementById('aiScore').textContent = aiSnake.body.length;
+        }
+
+        function endGame(winner) {
+            gameRunning = false;
+            clearInterval(gameLoop);
+            
+            const winnerText = winner === 'player' ? '¡Ganaste! 🎉' : '¡La IA ganó! 🤖';
+            document.getElementById('gameOverText').textContent = winnerText;
+            document.getElementById('winner').textContent = 
+                winner === 'player' ? 'Tu serpiente devoró a la competencia' : 'La IA fue más astuta esta vez';
+            
+            gameOverDiv.style.display = 'block';
+        }
+
+        function startGame() {
+            gameRunning = true;
+            gamePaused = false;
+            gameOverDiv.style.display = 'none';
+
+            // Reiniciar serpientes
+            playerSnake = {
+                body: [{x: 5, y: 5}, {x: 4, y: 5}, {x: 3, y: 5}],
+                direction: {x: 1, y: 0},
+                color: '#4ecdc4'
+            };
+
+            aiSnake = {
+                body: [{x: 25, y: 15}, {x: 24, y: 15}, {x: 23, y: 15}],
+                direction: {x: -1, y: 0},
+                color: '#ff6b6b'
+            };
+
+            food = generateFood();
+            updateScores();
+
+            clearInterval(gameLoop);
+            gameLoop = setInterval(gameStep, 150);
+            drawGame();
+        }
+
+        function togglePause() {
+            if (!gameRunning) return;
+            gamePaused = !gamePaused;
+        }
+
+        // Controles del teclado
+        document.addEventListener('keydown', (e) => {
+            if (!gameRunning || gamePaused) return;
+
+            switch(e.key) {
+                case 'ArrowUp':
+                    if (playerSnake.direction.y === 0) {
+                        playerSnake.direction = {x: 0, y: -1};
+                    }
+                    break;
+                case 'ArrowDown':
+                    if (playerSnake.direction.y === 0) {
+                        playerSnake.direction = {x: 0, y: 1};
+                    }
+                    break;
+                case 'ArrowLeft':
+                    if (playerSnake.direction.x === 0) {
+                        playerSnake.direction = {x: -1, y: 0};
+                    }
+                    break;
+                case 'ArrowRight':
+                    if (playerSnake.direction.x === 0) {
+                        playerSnake.direction = {x: 1, y: 0};
+                    }
+                    break;
+            }
+            e.preventDefault();
+        });
+
+        // Inicializar juego
+        drawGame();
+    </script>
+</body>
+</html>
